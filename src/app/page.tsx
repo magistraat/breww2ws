@@ -1,7 +1,198 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { Building2, FileSpreadsheet, Package, Search } from "lucide-react";
 
+type BrewwProduct = {
+  id: string;
+  name: string;
+  sku?: string;
+  abv?: number;
+};
+
+type BrewwStockItem = {
+  id: string;
+  name: string;
+  sku?: string;
+  ean?: string;
+  volume?: string;
+};
+
+type Wholesaler = {
+  id: string;
+  name: string;
+  slug: string;
+  brand_color?: string | null;
+};
+
+type Template = {
+  id: string;
+  name: string;
+  wholesaler_id: string;
+};
+
 export default function Home() {
+  const [query, setQuery] = useState("");
+  const [products, setProducts] = useState<BrewwProduct[]>([]);
+  const [stockItems, setStockItems] = useState<BrewwStockItem[]>([]);
+  const [selectedProduct, setSelectedProduct] =
+    useState<BrewwProduct | null>(null);
+  const [selectedStock, setSelectedStock] =
+    useState<BrewwStockItem | null>(null);
+  const [wholesalers, setWholesalers] = useState<Wholesaler[]>([]);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [selectedWholesaler, setSelectedWholesaler] = useState("");
+  const [selectedTemplate, setSelectedTemplate] = useState("");
+  const [enrichment, setEnrichment] = useState({
+    description: "",
+    origin: "",
+    serving: "",
+  });
+  const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [exportStatus, setExportStatus] = useState<
+    "idle" | "exporting" | "error"
+  >("idle");
+  const [exportError, setExportError] = useState("");
+
+  const canGenerate = useMemo(
+    () => Boolean(selectedProduct && selectedStock && selectedTemplate),
+    [selectedProduct, selectedStock, selectedTemplate]
+  );
+
+  useEffect(() => {
+    const loadWholesalers = async () => {
+      const response = await fetch("/api/catalog/wholesalers");
+      if (!response.ok) return;
+      const data = await response.json();
+      setWholesalers(Array.isArray(data) ? data : []);
+    };
+    loadWholesalers();
+  }, []);
+
+  useEffect(() => {
+    const loadTemplates = async () => {
+      if (!selectedWholesaler) {
+        setTemplates([]);
+        setSelectedTemplate("");
+        return;
+      }
+      const response = await fetch(
+        `/api/catalog/templates?wholesaler_id=${selectedWholesaler}`
+      );
+      if (!response.ok) return;
+      const data = await response.json();
+      setTemplates(Array.isArray(data) ? data : []);
+    };
+    loadTemplates();
+  }, [selectedWholesaler]);
+
+  const handleSearch = async () => {
+    if (!query.trim()) {
+      setProducts([]);
+      return;
+    }
+
+    setStatus("loading");
+    setErrorMessage("");
+    try {
+      const response = await fetch("/api/breww/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query }),
+      });
+      if (!response.ok) {
+        throw new Error("Breww zoekopdracht mislukt.");
+      }
+      const data = await response.json();
+      const items = Array.isArray(data?.data) ? data.data : data;
+      setProducts(items ?? []);
+      setStatus("idle");
+    } catch (error) {
+      setStatus("error");
+      setErrorMessage(
+        error instanceof Error ? error.message : "Onbekende fout."
+      );
+    }
+  };
+
+  const loadStockItems = async (product: BrewwProduct) => {
+    setSelectedProduct(product);
+    setSelectedStock(null);
+    setStockItems([]);
+    setStatus("loading");
+    setErrorMessage("");
+    try {
+      const response = await fetch("/api/breww/stock-items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId: product.id }),
+      });
+      if (!response.ok) {
+        throw new Error("Stock items ophalen mislukt.");
+      }
+      const data = await response.json();
+      const items = Array.isArray(data?.data) ? data.data : data;
+      setStockItems(items ?? []);
+      setStatus("idle");
+    } catch (error) {
+      setStatus("error");
+      setErrorMessage(
+        error instanceof Error ? error.message : "Onbekende fout."
+      );
+    }
+  };
+
+  const handleGenerate = async () => {
+    if (!selectedTemplate || !selectedProduct || !selectedStock) return;
+    setExportStatus("exporting");
+    setExportError("");
+
+    const fields = {
+      artikelnaam: selectedProduct.name,
+      sku: selectedStock.sku ?? "",
+      ean: selectedStock.ean ?? "",
+      abv: selectedProduct.abv ?? "",
+      volume: selectedStock.volume ?? "",
+      marketing_omschrijving: enrichment.description,
+      herkomst: enrichment.origin,
+      serveertip: enrichment.serving,
+    };
+
+    try {
+      const response = await fetch("/api/excel/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          template_id: selectedTemplate,
+          fields,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error("Excel generatie mislukt.");
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get("Content-Disposition") ?? "";
+      const match = disposition.match(/filename="(.+?)"/);
+      const filename = match?.[1] ?? "export.xlsx";
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      setExportStatus("idle");
+    } catch (error) {
+      setExportStatus("error");
+      setExportError(
+        error instanceof Error ? error.message : "Export mislukt."
+      );
+    }
+  };
+
   return (
     <div className="min-h-screen px-6 py-10 text-[15px] text-foreground md:px-12">
       <header className="mx-auto flex w-full max-w-6xl flex-col gap-6 rounded-3xl border border-[var(--border)] bg-[var(--surface)] px-8 py-8 shadow-[0_16px_50px_rgba(31,35,40,0.08)]">
@@ -29,7 +220,7 @@ export default function Home() {
               </Link>
             </div>
             <p className="mt-1 text-[var(--muted)]">
-              Geen product geselecteerd
+              {selectedProduct ? selectedProduct.name : "Geen product geselecteerd"}
             </p>
             <p className="mt-3 text-xs font-semibold text-[var(--accent)]">
               Stap 1 van 4
@@ -80,9 +271,14 @@ export default function Home() {
                 <input
                   className="w-full bg-transparent text-sm outline-none"
                   placeholder="Zoek op naam, SKU of stijl..."
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
                 />
-                <button className="rounded-full bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-white">
-                  Zoeken
+                <button
+                  className="rounded-full bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-white"
+                  onClick={handleSearch}
+                >
+                  {status === "loading" ? "Zoeken..." : "Zoeken"}
                 </button>
               </div>
             </div>
@@ -91,7 +287,26 @@ export default function Home() {
                 Resultaat
               </label>
               <div className="mt-2 rounded-2xl border border-dashed border-[var(--border)] bg-[#fbf8f4] px-4 py-5 text-sm text-[var(--muted)]">
-                Geen resultaten geladen.
+                {status === "error" && errorMessage}
+                {status !== "error" && products.length === 0
+                  ? "Geen resultaten geladen."
+                  : null}
+                {products.length > 0 && (
+                  <div className="space-y-2">
+                    {products.map((product) => (
+                      <button
+                        key={product.id}
+                        onClick={() => loadStockItems(product)}
+                        className="flex w-full items-center justify-between rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-left text-sm"
+                      >
+                        <span className="font-semibold">{product.name}</span>
+                        <span className="text-xs text-[var(--muted)]">
+                          {product.sku ?? product.id}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -101,18 +316,27 @@ export default function Home() {
                 Verpakking (Stock Item)
               </p>
               <div className="mt-3 space-y-2 text-sm">
-                <label className="flex items-center justify-between rounded-xl border border-[var(--border)] px-3 py-2">
-                  <span>24x33cl doos</span>
-                  <span className="text-xs text-[var(--muted)]">SKU 11024</span>
-                </label>
-                <label className="flex items-center justify-between rounded-xl border border-[var(--border)] px-3 py-2">
-                  <span>20L fust</span>
-                  <span className="text-xs text-[var(--muted)]">SKU 22005</span>
-                </label>
-                <label className="flex items-center justify-between rounded-xl border border-[var(--border)] px-3 py-2">
-                  <span>6x75cl doos</span>
-                  <span className="text-xs text-[var(--muted)]">SKU 11077</span>
-                </label>
+                {stockItems.length === 0 && (
+                  <p className="text-xs text-[var(--muted)]">
+                    Selecteer eerst een product.
+                  </p>
+                )}
+                {stockItems.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => setSelectedStock(item)}
+                    className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-sm ${
+                      selectedStock?.id === item.id
+                        ? "border-[var(--accent)] bg-[#fef3e7]"
+                        : "border-[var(--border)]"
+                    }`}
+                  >
+                    <span>{item.name}</span>
+                    <span className="text-xs text-[var(--muted)]">
+                      {item.sku ?? item.ean ?? item.id}
+                    </span>
+                  </button>
+                ))}
               </div>
             </div>
             <div className="rounded-2xl border border-[var(--border)] bg-white px-4 py-4">
@@ -120,18 +344,31 @@ export default function Home() {
                 Groothandel
               </p>
               <div className="mt-3 space-y-2 text-sm">
-                <label className="flex items-center justify-between rounded-xl border border-[var(--border)] px-3 py-2">
-                  <span>De Monnik Dranken</span>
-                  <span className="text-xs text-[var(--muted)]">MON</span>
-                </label>
-                <label className="flex items-center justify-between rounded-xl border border-[var(--border)] px-3 py-2">
-                  <span>Mitra Nederland</span>
-                  <span className="text-xs text-[var(--muted)]">MIT</span>
-                </label>
-                <label className="flex items-center justify-between rounded-xl border border-[var(--border)] px-3 py-2">
-                  <span>Jumbo Horeca</span>
-                  <span className="text-xs text-[var(--muted)]">JUM</span>
-                </label>
+                <select
+                  className="w-full rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm"
+                  value={selectedWholesaler}
+                  onChange={(event) => setSelectedWholesaler(event.target.value)}
+                >
+                  <option value="">Selecteer groothandel</option>
+                  {wholesalers.map((wholesaler) => (
+                    <option key={wholesaler.id} value={wholesaler.id}>
+                      {wholesaler.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="w-full rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm"
+                  value={selectedTemplate}
+                  onChange={(event) => setSelectedTemplate(event.target.value)}
+                  disabled={!selectedWholesaler}
+                >
+                  <option value="">Selecteer template</option>
+                  {templates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           </div>
@@ -144,9 +381,20 @@ export default function Home() {
                 Template wordt gevuld met SKU, EAN, ABV en volumes.
               </p>
             </div>
-            <button className="rounded-full bg-[var(--foreground)] px-5 py-2 text-sm font-semibold text-white">
-              Genereer Excel
-            </button>
+            <div className="flex flex-col items-end gap-2">
+              <button
+                className="rounded-full bg-[var(--foreground)] px-5 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={!canGenerate || exportStatus === "exporting"}
+                onClick={handleGenerate}
+              >
+                {exportStatus === "exporting"
+                  ? "Bezig met exporteren..."
+                  : "Genereer Excel"}
+              </button>
+              {exportStatus === "error" && (
+                <p className="text-xs text-red-600">{exportError}</p>
+              )}
+            </div>
           </div>
         </section>
 
@@ -185,6 +433,13 @@ export default function Home() {
               <input
                 className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-2"
                 placeholder="Bier met citrus, tropisch fruit en zachte bitterheid."
+                value={enrichment.description}
+                onChange={(event) =>
+                  setEnrichment((prev) => ({
+                    ...prev,
+                    description: event.target.value,
+                  }))
+                }
               />
             </div>
             <div>
@@ -194,6 +449,13 @@ export default function Home() {
               <input
                 className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-2"
                 placeholder="Nederland, Rotterdam"
+                value={enrichment.origin}
+                onChange={(event) =>
+                  setEnrichment((prev) => ({
+                    ...prev,
+                    origin: event.target.value,
+                  }))
+                }
               />
             </div>
             <div>
@@ -203,6 +465,13 @@ export default function Home() {
               <input
                 className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-2"
                 placeholder="Goed gekoeld, 6-8°C."
+                value={enrichment.serving}
+                onChange={(event) =>
+                  setEnrichment((prev) => ({
+                    ...prev,
+                    serving: event.target.value,
+                  }))
+                }
               />
             </div>
           </div>

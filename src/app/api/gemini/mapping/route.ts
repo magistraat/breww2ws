@@ -27,7 +27,10 @@ export async function POST(request: Request) {
   const prompt = [
     "Je bent een tool die Excel templates mapt voor groothandels.",
     "Analyseer de tabbladen en geef alleen JSON terug met velden en cellen.",
-    "Voorbeeld: {\"artikelnaam\":\"Sheet1!B12\"}",
+    "Gebruik deze keys waar mogelijk:",
+    "artikelnaam, ean, sku, abv, volume, merknaam, verpakking, inhoud, herkomst, allergenen, marketing_omschrijving",
+    "Voorbeeld: {\"artikelnaam\":\"Sheet1!B12\",\"ean\":\"Sheet1!D9\"}",
+    "Geef uitsluitend het JSON object terug, zonder extra tekst.",
     `Template inhoud:\n${workbookText}`,
   ].join("\n");
 
