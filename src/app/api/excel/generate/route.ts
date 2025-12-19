@@ -4,12 +4,25 @@ import { getServerSupabase } from "@/lib/supabase-server";
 
 type Mapping = Record<string, string>;
 
+function normalizeCellValue(value: unknown): ExcelJS.CellValue {
+  if (value === null || value === undefined) return "";
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    value instanceof Date
+  ) {
+    return value;
+  }
+  return JSON.stringify(value);
+}
+
 function setCell(workbook: ExcelJS.Workbook, reference: string, value: unknown) {
   const [sheetName, cell] = reference.split("!");
   if (!sheetName || !cell) return;
   const sheet = workbook.getWorksheet(sheetName);
   if (!sheet) return;
-  sheet.getCell(cell).value = value ?? "";
+  sheet.getCell(cell).value = normalizeCellValue(value);
 }
 
 export async function POST(request: Request) {
