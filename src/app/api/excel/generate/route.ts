@@ -47,7 +47,8 @@ export async function POST(request: Request) {
 
   const workbook = new ExcelJS.Workbook();
   const buffer = Buffer.from(data.workbook_base64, "base64");
-  await workbook.xlsx.load(buffer);
+  const bytes = new Uint8Array(buffer);
+  await workbook.xlsx.load(bytes);
 
   const mapping = (data.mapping_json ?? {}) as Mapping;
   Object.entries(mapping).forEach(([key, cell]) => {
