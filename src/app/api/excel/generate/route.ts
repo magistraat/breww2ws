@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
+import { Buffer } from "node:buffer";
 import { getServerSupabase } from "@/lib/supabase-server";
 
 type Mapping = Record<string, string>;
@@ -46,9 +47,8 @@ export async function POST(request: Request) {
   }
 
   const workbook = new ExcelJS.Workbook();
-  const buffer = Buffer.from(data.workbook_base64, "base64");
-  const bytes = new Uint8Array(buffer);
-  await workbook.xlsx.load(bytes);
+  const buffer = Buffer.from(data.workbook_base64, "base64") as Buffer;
+  await workbook.xlsx.load(buffer);
 
   const mapping = (data.mapping_json ?? {}) as Mapping;
   Object.entries(mapping).forEach(([key, cell]) => {
