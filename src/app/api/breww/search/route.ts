@@ -43,7 +43,8 @@ export async function POST(request: Request) {
     ? baseUrlRaw.slice(0, -1)
     : baseUrlRaw;
   const url = new URL(`${baseUrl}/products`);
-  url.searchParams.set("search", query);
+  url.searchParams.set("name__contains", query);
+  url.searchParams.set("code__contains", query);
 
   const response = await fetch(url, {
     headers: {
@@ -61,21 +62,11 @@ export async function POST(request: Request) {
     );
   }
 
-  let data = await response.json();
-  const items = Array.isArray(data?.data) ? data.data : data;
-  if (Array.isArray(items) && items.length === 0) {
-    const altUrl = new URL(`${baseUrl}/products`);
-    altUrl.searchParams.set("query", query);
-    const altResponse = await fetch(altUrl, {
-      headers: {
-        Authorization: `Bearer ${settings.breww_api_key}`,
-        "Content-Type": "application/json",
-      },
-      cache: "no-store",
-    });
-    if (altResponse.ok) {
-      data = await altResponse.json();
-    }
-  }
-  return NextResponse.json(data);
+  const data = await response.json();
+  const items = Array.isArray(data?.results)
+    ? data.results
+    : Array.isArray(data?.data)
+    ? data.data
+    : data;
+  return NextResponse.json(items ?? []);
 }

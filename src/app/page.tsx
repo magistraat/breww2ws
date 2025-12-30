@@ -154,8 +154,7 @@ export default function Home() {
         );
       }
       const data = await response.json();
-      const items = Array.isArray(data?.data) ? data.data : data;
-      setProducts(items ?? []);
+      setProducts(Array.isArray(data) ? data : []);
       setStatus("idle");
     } catch (error) {
       setStatus("error");
