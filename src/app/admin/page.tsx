@@ -98,6 +98,12 @@ export default function AdminPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!adminToken) return;
+    if (!selectedWholesalerId) return;
+    loadTemplates(adminToken, selectedWholesalerId);
+  }, [adminToken, selectedWholesalerId]);
+
   const handleChange =
     (field: keyof SettingsForm) =>
     (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -664,7 +670,15 @@ export default function AdminPage() {
                 </select>
                 <button
                   className="rounded-full border border-[var(--border)] bg-white px-3 py-2 text-xs font-semibold"
-                  onClick={() => loadTemplates(adminToken, selectedWholesalerId)}
+                  onClick={() => {
+                    if (!adminToken) {
+                      setTemplateStatus("error");
+                      setTemplateError("Vul eerst de admin token in.");
+                      return;
+                    }
+                    loadTemplates(adminToken, selectedWholesalerId);
+                  }}
+                  disabled={!selectedWholesalerId}
                 >
                   Templates laden
                 </button>
