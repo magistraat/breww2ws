@@ -27,6 +27,26 @@ type Template = {
   created_at: string;
 };
 
+const GLOBAL_FIELD_KEYS = new Set([
+  "krat_gewicht_kg",
+  "doos_gewicht_kg",
+  "pallet_gewicht_kg",
+  "pallet_hoogte_cm",
+  "bewaartemperatuur_c",
+  "houdbaarheid_dagen",
+  "verpakkingsmateriaal",
+]);
+
+const BREWW_FIELD_KEYS = new Set([
+  "artikelnaam",
+  "sku",
+  "ean",
+  "abv",
+  "volume",
+  "merknaam",
+  "stijl",
+]);
+
 export default function AdminPage() {
   const [adminToken, setAdminToken] = useState("");
   const [form, setForm] = useState<SettingsForm>({
@@ -317,6 +337,7 @@ export default function AdminPage() {
         setMappingStatus("error");
         return;
       }
+      await ensureFieldDefinitions(parsed.mapping);
       setMappingStatus("done");
     } catch (error) {
       setMappingStatus("error");
@@ -368,6 +389,7 @@ export default function AdminPage() {
       if (!response.ok) {
         throw new Error("Opslaan template mislukt.");
       }
+      await ensureFieldDefinitions(mapping);
       await loadTemplates(adminToken, selectedWholesalerId);
       setMappingStatus("done");
     } catch (error) {
@@ -443,6 +465,69 @@ export default function AdminPage() {
       }
     });
     return normalized;
+  };
+
+  const ensureFieldDefinitions = async (mappingData: MappingResult) => {
+    if (!adminToken || !selectedWholesalerId) return;
+    const keys = Object.keys(mappingData);
+    if (keys.length === 0) return;
+
+    const globalKeys = keys.filter((key) => GLOBAL_FIELD_KEYS.has(key));
+    const wholesalerKeys = keys.filter((key) => !GLOBAL_FIELD_KEYS.has(key));
+
+    if (globalKeys.length > 0) {
+      await fetch("/api/fields/ensure", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-token": adminToken,
+        },
+        body: JSON.stringify({
+          keys: globalKeys,
+          scope: "global",
+          source: "manual",
+        }),
+      });
+    }
+
+    if (wholesalerKeys.length > 0) {
+      const brewwKeys = wholesalerKeys.filter((key) => BREWW_FIELD_KEYS.has(key));
+      const customKeys = wholesalerKeys.filter(
+        (key) => !BREWW_FIELD_KEYS.has(key)
+      );
+
+      if (brewwKeys.length > 0) {
+        await fetch("/api/fields/ensure", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-admin-token": adminToken,
+          },
+          body: JSON.stringify({
+            keys: brewwKeys,
+            scope: "wholesaler",
+            wholesaler_id: selectedWholesalerId,
+            source: "breww",
+          }),
+        });
+      }
+
+      if (customKeys.length > 0) {
+        await fetch("/api/fields/ensure", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-admin-token": adminToken,
+          },
+          body: JSON.stringify({
+            keys: customKeys,
+            scope: "wholesaler",
+            wholesaler_id: selectedWholesalerId,
+            source: "manual",
+          }),
+        });
+      }
+    }
   };
 
   return (
