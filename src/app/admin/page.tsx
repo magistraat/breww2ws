@@ -27,6 +27,16 @@ type Template = {
   created_at: string;
 };
 
+type FieldDefinition = {
+  id: string;
+  key: string;
+  label: string | null;
+  scope: string;
+  wholesaler_id: string | null;
+  source: string;
+  field_values?: { value: string | null }[];
+};
+
 const GLOBAL_FIELD_KEYS = new Set([
   "krat_gewicht_kg",
   "doos_gewicht_kg",
@@ -83,6 +93,14 @@ export default function AdminPage() {
   const [templateError, setTemplateError] = useState("");
   const [editingTemplateId, setEditingTemplateId] = useState("");
   const [editingMapping, setEditingMapping] = useState("");
+  const [globalFields, setGlobalFields] = useState<FieldDefinition[]>([]);
+  const [wholesalerFields, setWholesalerFields] = useState<FieldDefinition[]>(
+    []
+  );
+  const [fieldStatus, setFieldStatus] = useState<
+    "idle" | "loading" | "saving" | "error" | "saved"
+  >("idle");
+  const [fieldError, setFieldError] = useState("");
 
   const canUseAdmin = useMemo(() => Boolean(adminToken), [adminToken]);
 
@@ -112,6 +130,7 @@ export default function AdminPage() {
     if (storedToken) {
       loadWholesalers(storedToken);
       loadTemplates(storedToken);
+      loadGlobalFields(storedToken);
     }
     return () => {
       mounted = false;
@@ -122,6 +141,11 @@ export default function AdminPage() {
     if (!adminToken) return;
     if (!selectedWholesalerId) return;
     loadTemplates(adminToken, selectedWholesalerId);
+  }, [adminToken, selectedWholesalerId]);
+
+  useEffect(() => {
+    if (!adminToken || !selectedWholesalerId) return;
+    loadWholesalerFields(adminToken, selectedWholesalerId);
   }, [adminToken, selectedWholesalerId]);
 
   const handleChange =
@@ -197,6 +221,90 @@ export default function AdminPage() {
         error instanceof Error ? error.message : "Onbekende fout."
       );
     }
+  };
+
+  const loadGlobalFields = async (token: string) => {
+    setFieldStatus("loading");
+    setFieldError("");
+    try {
+      const response = await fetch("/api/fields/values?scope=global", {
+        headers: { "x-admin-token": token },
+      });
+      if (!response.ok) {
+        throw new Error("Globale velden ophalen mislukt.");
+      }
+      const data = await response.json();
+      setGlobalFields(Array.isArray(data) ? data : []);
+      setFieldStatus("idle");
+    } catch (error) {
+      setFieldStatus("error");
+      setFieldError(
+        error instanceof Error ? error.message : "Onbekende fout."
+      );
+    }
+  };
+
+  const loadWholesalerFields = async (token: string, wholesalerId: string) => {
+    setFieldStatus("loading");
+    setFieldError("");
+    try {
+      const response = await fetch(
+        `/api/fields/values?scope=wholesaler&wholesaler_id=${wholesalerId}`,
+        { headers: { "x-admin-token": token } }
+      );
+      if (!response.ok) {
+        throw new Error("Groothandel velden ophalen mislukt.");
+      }
+      const data = await response.json();
+      setWholesalerFields(Array.isArray(data) ? data : []);
+      setFieldStatus("idle");
+    } catch (error) {
+      setFieldStatus("error");
+      setFieldError(
+        error instanceof Error ? error.message : "Onbekende fout."
+      );
+    }
+  };
+
+  const updateFieldValue = (
+    listSetter: React.Dispatch<React.SetStateAction<FieldDefinition[]>>,
+    id: string,
+    value: string
+  ) => {
+    listSetter((prev) =>
+      prev.map((field) =>
+        field.id === id ? { ...field, field_values: [{ value }] } : field
+      )
+    );
+  };
+
+  const saveFieldValues = async () => {
+    if (!adminToken) {
+      setFieldStatus("error");
+      setFieldError("Admin token ontbreekt.");
+      return;
+    }
+    setFieldStatus("saving");
+    setFieldError("");
+    const items = [...globalFields, ...wholesalerFields].map((field) => ({
+      field_definition_id: field.id,
+      value: field.field_values?.[0]?.value ?? "",
+    }));
+    const response = await fetch("/api/fields/values", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-token": adminToken,
+      },
+      body: JSON.stringify({ items }),
+    });
+    if (!response.ok) {
+      setFieldStatus("error");
+      setFieldError("Opslaan veldwaarden mislukt.");
+      return;
+    }
+    setFieldStatus("saved");
+    window.setTimeout(() => setFieldStatus("idle"), 2000);
   };
 
   const handleTemplateDelete = async (id: string) => {
@@ -577,6 +685,10 @@ export default function AdminPage() {
                   if (value) {
                     loadWholesalers(value);
                     loadTemplates(value, selectedWholesalerId);
+                    loadGlobalFields(value);
+                    if (selectedWholesalerId) {
+                      loadWholesalerFields(value, selectedWholesalerId);
+                    }
                   }
                 }}
               />
@@ -892,6 +1004,99 @@ export default function AdminPage() {
                 </div>
               </div>
             )}
+          </div>
+        </section>
+
+        <section className="lg:col-span-2 flex flex-col gap-6 rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-7 shadow-[0_10px_30px_rgba(31,35,40,0.06)]">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--muted)]">
+                Veldwaarden
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold">
+                Universele en groothandel-specifieke velden
+              </h2>
+              <p className="mt-2 text-sm text-[var(--muted)]">
+                Vul globale waarden in voor alle groothandels en specifieke
+                waarden per groothandel.
+              </p>
+            </div>
+            <button
+              className="rounded-full bg-[var(--foreground)] px-4 py-2 text-sm font-semibold text-white"
+              onClick={saveFieldValues}
+            >
+              Opslaan velden
+            </button>
+          </div>
+          {fieldStatus === "error" && (
+            <p className="text-sm font-semibold text-red-600">{fieldError}</p>
+          )}
+          {fieldStatus === "saved" && (
+            <p className="text-sm font-semibold text-[var(--accent)]">
+              Veldwaarden opgeslagen.
+            </p>
+          )}
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div className="rounded-2xl border border-[var(--border)] bg-white p-5 text-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+                Globale velden
+              </p>
+              <div className="mt-3 space-y-3">
+                {globalFields.length === 0 && (
+                  <p className="text-xs text-[var(--muted)]">
+                    Nog geen globale velden.
+                  </p>
+                )}
+                {globalFields.map((field) => (
+                  <div key={field.id}>
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+                      {field.label ?? field.key}
+                    </label>
+                    <input
+                      className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-2"
+                      value={field.field_values?.[0]?.value ?? ""}
+                      onChange={(event) =>
+                        updateFieldValue(
+                          setGlobalFields,
+                          field.id,
+                          event.target.value
+                        )
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-[var(--border)] bg-white p-5 text-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+                Groothandel velden
+              </p>
+              <div className="mt-3 space-y-3">
+                {wholesalerFields.length === 0 && (
+                  <p className="text-xs text-[var(--muted)]">
+                    Selecteer een groothandel om velden te zien.
+                  </p>
+                )}
+                {wholesalerFields.map((field) => (
+                  <div key={field.id}>
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+                      {field.label ?? field.key}
+                    </label>
+                    <input
+                      className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-2"
+                      value={field.field_values?.[0]?.value ?? ""}
+                      onChange={(event) =>
+                        updateFieldValue(
+                          setWholesalerFields,
+                          field.id,
+                          event.target.value
+                        )
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </section>
       </main>

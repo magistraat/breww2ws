@@ -32,6 +32,12 @@ type Template = {
   wholesaler_id: string;
 };
 
+type FieldDefinition = {
+  id: string;
+  key: string;
+  field_values?: { value: string | null }[];
+};
+
 export default function Home() {
   const [query, setQuery] = useState("");
   const [products, setProducts] = useState<BrewwProduct[]>([]);
@@ -55,6 +61,10 @@ export default function Home() {
     "idle" | "exporting" | "error"
   >("idle");
   const [exportError, setExportError] = useState("");
+  const [globalFields, setGlobalFields] = useState<FieldDefinition[]>([]);
+  const [wholesalerFields, setWholesalerFields] = useState<FieldDefinition[]>(
+    []
+  );
 
   const canGenerate = useMemo(
     () => Boolean(selectedProduct && selectedStock && selectedTemplate),
@@ -86,6 +96,41 @@ export default function Home() {
       setTemplates(Array.isArray(data) ? data : []);
     };
     loadTemplates();
+  }, [selectedWholesaler]);
+
+  useEffect(() => {
+    const loadGlobalFields = async () => {
+      const response = await fetch("/api/fields/values?scope=global", {
+        headers: {
+          "x-admin-token": window.localStorage.getItem("adminToken") ?? "",
+        },
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      setGlobalFields(Array.isArray(data) ? data : []);
+    };
+    loadGlobalFields();
+  }, []);
+
+  useEffect(() => {
+    const loadWholesalerFields = async () => {
+      if (!selectedWholesaler) {
+        setWholesalerFields([]);
+        return;
+      }
+      const response = await fetch(
+        `/api/fields/values?scope=wholesaler&wholesaler_id=${selectedWholesaler}`,
+        {
+          headers: {
+            "x-admin-token": window.localStorage.getItem("adminToken") ?? "",
+          },
+        }
+      );
+      if (!response.ok) return;
+      const data = await response.json();
+      setWholesalerFields(Array.isArray(data) ? data : []);
+    };
+    loadWholesalerFields();
   }, [selectedWholesaler]);
 
   const handleSearch = async () => {
@@ -149,6 +194,14 @@ export default function Home() {
     setExportStatus("exporting");
     setExportError("");
 
+    const fieldValues = [...globalFields, ...wholesalerFields].reduce(
+      (acc, field) => {
+        acc[field.key] = field.field_values?.[0]?.value ?? "";
+        return acc;
+      },
+      {} as Record<string, string>
+    );
+
     const fields = {
       artikelnaam: selectedProduct.name,
       sku: selectedStock.sku ?? "",
@@ -158,6 +211,7 @@ export default function Home() {
       marketing_omschrijving: enrichment.description,
       herkomst: enrichment.origin,
       serveertip: enrichment.serving,
+      ...fieldValues,
     };
 
     try {
