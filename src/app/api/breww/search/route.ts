@@ -32,10 +32,17 @@ export async function POST(request: Request) {
     );
   }
 
-  const subdomain = settings.breww_subdomain
+  const rawSubdomain = settings.breww_subdomain
     .replace(/^https?:\/\//, "")
-    .replace(/\.breww\.com\/?$/, "")
     .replace(/\/.*$/, "");
+  const subdomainMatch = rawSubdomain.match(/^([a-z0-9-]+)\.breww\.com$/i);
+  const subdomain = subdomainMatch ? subdomainMatch[1] : rawSubdomain;
+  if (!subdomain || subdomain.includes(".")) {
+    return NextResponse.json(
+      { error: "Breww subdomain is invalid. Use only the subdomain." },
+      { status: 400 }
+    );
+  }
   const url = new URL(`https://${subdomain}.breww.com/api/products`);
   url.searchParams.set("search", query);
 
