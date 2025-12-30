@@ -431,7 +431,10 @@ export default function AdminPage() {
         body: JSON.stringify({ workbookText }),
       });
       if (!response.ok) {
-        throw new Error("Gemini mapping mislukt.");
+        const text = await response.text();
+        throw new Error(
+          text ? `Gemini mapping mislukt: ${text}` : "Gemini mapping mislukt."
+        );
       }
       const data = await response.json();
       const rawText =
@@ -879,15 +882,31 @@ export default function AdminPage() {
                 >
                   Templates laden
                 </button>
-                <input
-                  type="file"
-                  accept=".xlsx"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0] ?? null;
-                    setTemplateFile(file);
-                    setMapping({});
-                  }}
-                />
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    className="rounded-full border border-[var(--border)] bg-white px-3 py-2 text-xs font-semibold"
+                    onClick={() =>
+                      document.getElementById("template-upload")?.click()
+                    }
+                  >
+                    Upload Excel
+                  </button>
+                  <span className="text-xs text-[var(--muted)]">
+                    {templateFile ? templateFile.name : "Geen bestand gekozen"}
+                  </span>
+                  <input
+                    id="template-upload"
+                    type="file"
+                    accept=".xlsx"
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] ?? null;
+                      setTemplateFile(file);
+                      setMapping({});
+                      setMappingError("");
+                    }}
+                  />
+                </div>
                 <input
                   className="w-full rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm"
                   placeholder="Template naam (bijv. De Monnik standaard)"
