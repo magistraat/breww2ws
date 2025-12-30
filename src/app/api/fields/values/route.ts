@@ -48,16 +48,19 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json().catch(() => ({}));
-  const items = Array.isArray(body?.items) ? body.items : [];
+  const items: Array<{ field_definition_id?: string; value?: unknown }> =
+    Array.isArray(body?.items) ? body.items : [];
   if (items.length === 0) {
     return NextResponse.json({ ok: true });
   }
 
   const supabase = getServerSupabase();
-  const records = items.map((item) => ({
-    field_definition_id: item.field_definition_id,
+  const records = items
+    .filter((item) => typeof item.field_definition_id === "string")
+    .map((item: { field_definition_id?: string; value?: unknown }) => ({
+      field_definition_id: item.field_definition_id as string,
     value: typeof item.value === "string" ? item.value : "",
-  }));
+    }));
 
   const { error } = await supabase
     .from("field_values")
