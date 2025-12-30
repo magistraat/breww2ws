@@ -24,7 +24,18 @@ export async function POST(request: Request) {
   const baseUrl = "https://generativelanguage.googleapis.com";
   const apiVersions = ["v1beta", "v1"];
 
-  const listModels = async (version: string) => {
+  type GeminiModel = {
+    name?: string;
+    supportedGenerationMethods?: string[];
+  };
+
+  type ModelInfo = {
+    name?: string;
+    methods: string[];
+    version: string;
+  };
+
+  const listModels = async (version: string): Promise<ModelInfo[]> => {
     const response = await fetch(
       `${baseUrl}/${version}/models?key=${apiKey}`
     );
@@ -35,8 +46,8 @@ export async function POST(request: Request) {
       );
     }
     const data = await response.json();
-    const models = Array.isArray(data?.models) ? data.models : [];
-    return models.map((model: { name?: string; supportedGenerationMethods?: string[] }) => ({
+    const models: GeminiModel[] = Array.isArray(data?.models) ? data.models : [];
+    return models.map((model: GeminiModel) => ({
       name: model.name,
       methods: model.supportedGenerationMethods ?? [],
       version,
@@ -48,10 +59,10 @@ export async function POST(request: Request) {
   for (const version of apiVersions) {
     try {
       const models = await listModels(version);
-      const supported = models.filter((model) =>
+      const supported = models.filter((model: ModelInfo) =>
         model.methods.includes("generateContent")
       );
-      const flashModel = supported.find((model) =>
+      const flashModel = supported.find((model: ModelInfo) =>
         /gemini.*flash/i.test(model.name ?? "")
       );
       const fallback = supported[0];
