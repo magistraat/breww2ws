@@ -61,6 +61,21 @@ export async function POST(request: Request) {
     );
   }
 
-  const data = await response.json();
+  let data = await response.json();
+  const items = Array.isArray(data?.data) ? data.data : data;
+  if (Array.isArray(items) && items.length === 0) {
+    const altUrl = new URL(`${baseUrl}/products`);
+    altUrl.searchParams.set("query", query);
+    const altResponse = await fetch(altUrl, {
+      headers: {
+        Authorization: `Bearer ${settings.breww_api_key}`,
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+    });
+    if (altResponse.ok) {
+      data = await altResponse.json();
+    }
+  }
   return NextResponse.json(data);
 }
