@@ -32,18 +32,17 @@ export async function POST(request: Request) {
     );
   }
 
-  const rawSubdomain = settings.breww_subdomain
-    .replace(/^https?:\/\//, "")
-    .replace(/\/.*$/, "");
-  const subdomainMatch = rawSubdomain.match(/^([a-z0-9-]+)\.breww\.com$/i);
-  const subdomain = subdomainMatch ? subdomainMatch[1] : rawSubdomain;
-  if (!subdomain || subdomain.includes(".")) {
+  const baseUrlRaw = settings.breww_subdomain.trim();
+  if (!baseUrlRaw) {
     return NextResponse.json(
-      { error: "Breww subdomain is invalid. Use only the subdomain." },
+      { error: "Breww base URL is invalid." },
       { status: 400 }
     );
   }
-  const url = `https://${subdomain}.breww.com/api/products/${productId}/stock-items`;
+  const baseUrl = baseUrlRaw.endsWith("/")
+    ? baseUrlRaw.slice(0, -1)
+    : baseUrlRaw;
+  const url = `${baseUrl}/products/${productId}/stock-items`;
 
   const response = await fetch(url, {
     headers: {

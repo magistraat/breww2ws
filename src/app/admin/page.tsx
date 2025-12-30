@@ -740,7 +740,7 @@ export default function AdminPage() {
               </label>
               <input
                 className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-2"
-                placeholder="jouwbrouwerij (alleen subdomein)"
+                placeholder="https://breww.com/api"
                 value={form.breww_subdomain}
                 onChange={handleChange("breww_subdomain")}
               />
