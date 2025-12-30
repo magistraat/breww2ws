@@ -390,10 +390,12 @@ export default function AdminPage() {
     setWholesalerStatus("idle");
   };
 
-  const readWorkbookText = async (file: File) => {
+  const readWorkbookData = async (file: File) => {
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: "array" });
     const output: string[] = [];
+    const autoMapping: MappingResult = {};
+
     workbook.SheetNames.forEach((name) => {
       const sheet = workbook.Sheets[name];
       const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
@@ -404,8 +406,43 @@ export default function AdminPage() {
           : "";
         output.push(line);
       });
+
+      const range = sheet["!ref"]
+        ? XLSX.utils.decode_range(sheet["!ref"])
+        : null;
+      if (!range) return;
+
+      for (let r = range.s.r; r <= range.e.r; r += 1) {
+        for (let c = range.s.c; c <= range.e.c; c += 1) {
+          const labelCell = XLSX.utils.encode_cell({ r, c });
+          const labelValue = sheet[labelCell]?.v;
+          if (typeof labelValue !== "string") continue;
+          const key = toKey(labelValue);
+          if (!key || autoMapping[key]) continue;
+
+          const rightCell = XLSX.utils.encode_cell({ r, c: c + 1 });
+          const belowCell = XLSX.utils.encode_cell({ r: r + 1, c });
+          const rightValue = sheet[rightCell]?.v;
+          const belowValue = sheet[belowCell]?.v;
+          if (rightValue === undefined || rightValue === "") {
+            autoMapping[key] = `${name}!${rightCell}`;
+          } else if (belowValue === undefined || belowValue === "") {
+            autoMapping[key] = `${name}!${belowCell}`;
+          }
+        }
+      }
     });
-    return output.join("\n");
+
+    return { workbookText: output.join("\n"), autoMapping };
+  };
+
+  const toKey = (value: string) => {
+    const cleaned = value
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+    return cleaned;
   };
 
   const handleMapping = async () => {
@@ -423,7 +460,7 @@ export default function AdminPage() {
     setMappingStatus("reading");
     setMappingError("");
     try {
-      const workbookText = await readWorkbookText(templateFile);
+      const { workbookText, autoMapping } = await readWorkbookData(templateFile);
       setMappingStatus("mapping");
       const response = await fetch("/api/gemini/mapping", {
         method: "POST",
@@ -442,13 +479,14 @@ export default function AdminPage() {
         data?.text ??
         "";
       const parsed = parseMapping(rawText);
-      setMapping(parsed.mapping);
+      const merged = { ...autoMapping, ...parsed.mapping };
+      setMapping(merged);
       if (parsed.error) {
         setMappingError(parsed.error);
         setMappingStatus("error");
         return;
       }
-      await ensureFieldDefinitions(parsed.mapping);
+      await ensureFieldDefinitions(merged);
       setMappingStatus("done");
     } catch (error) {
       setMappingStatus("error");
