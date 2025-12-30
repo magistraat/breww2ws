@@ -347,7 +347,9 @@ export default function Home() {
                 Resultaat
               </label>
               <div className="mt-2 rounded-2xl border border-dashed border-[var(--border)] bg-[#fbf8f4] px-4 py-5 text-sm text-[var(--muted)]">
-                {status === "error" && errorMessage}
+                {status === "error" && (
+                  <span className="text-red-600">{errorMessage}</span>
+                )}
                 {status !== "error" && products.length === 0
                   ? "Geen resultaten geladen."
                   : null}
