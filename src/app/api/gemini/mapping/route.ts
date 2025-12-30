@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   }
   const apiKey = settings.gemini_api_key;
   const endpoint =
-    "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent";
+    "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent";
 
   const prompt = [
     "Je bent een tool die Excel templates mapt voor groothandels.",
