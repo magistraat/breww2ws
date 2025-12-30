@@ -44,8 +44,13 @@ export async function POST(request: Request) {
   });
 
   if (!response.ok) {
+    const text = await response.text();
     return NextResponse.json(
-      { error: "Gemini request failed." },
+      {
+        error: "Gemini request failed.",
+        status: response.status,
+        details: text,
+      },
       { status: response.status }
     );
   }
