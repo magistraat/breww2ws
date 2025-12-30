@@ -20,7 +20,11 @@ export async function POST(request: Request) {
     );
   }
 
-  const url = `https://${settings.breww_subdomain}.breww.com/api/products/${productId}/stock-items`;
+  const subdomain = settings.breww_subdomain
+    .replace(/^https?:\/\//, "")
+    .replace(/\.breww\.com\/?$/, "")
+    .replace(/\/.*$/, "");
+  const url = `https://${subdomain}.breww.com/api/products/${productId}/stock-items`;
 
   const response = await fetch(url, {
     headers: {
@@ -31,8 +35,9 @@ export async function POST(request: Request) {
   });
 
   if (!response.ok) {
+    const text = await response.text();
     return NextResponse.json(
-      { error: "Breww request failed." },
+      { error: "Breww request failed.", status: response.status, details: text },
       { status: response.status }
     );
   }

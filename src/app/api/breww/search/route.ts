@@ -20,9 +20,11 @@ export async function POST(request: Request) {
     );
   }
 
-  const url = new URL(
-    `https://${settings.breww_subdomain}.breww.com/api/products`
-  );
+  const subdomain = settings.breww_subdomain
+    .replace(/^https?:\/\//, "")
+    .replace(/\.breww\.com\/?$/, "")
+    .replace(/\/.*$/, "");
+  const url = new URL(`https://${subdomain}.breww.com/api/products`);
   url.searchParams.set("search", query);
 
   const response = await fetch(url, {
@@ -34,8 +36,9 @@ export async function POST(request: Request) {
   });
 
   if (!response.ok) {
+    const text = await response.text();
     return NextResponse.json(
-      { error: "Breww request failed." },
+      { error: "Breww request failed.", status: response.status, details: text },
       { status: response.status }
     );
   }

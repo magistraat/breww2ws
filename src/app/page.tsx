@@ -148,7 +148,10 @@ export default function Home() {
         body: JSON.stringify({ query }),
       });
       if (!response.ok) {
-        throw new Error("Breww zoekopdracht mislukt.");
+        const text = await response.text();
+        throw new Error(
+          text ? `Breww zoekopdracht mislukt: ${text}` : "Breww zoekopdracht mislukt."
+        );
       }
       const data = await response.json();
       const items = Array.isArray(data?.data) ? data.data : data;
@@ -175,7 +178,10 @@ export default function Home() {
         body: JSON.stringify({ productId: product.id }),
       });
       if (!response.ok) {
-        throw new Error("Stock items ophalen mislukt.");
+        const text = await response.text();
+        throw new Error(
+          text ? `Stock items ophalen mislukt: ${text}` : "Stock items ophalen mislukt."
+        );
       }
       const data = await response.json();
       const items = Array.isArray(data?.data) ? data.data : data;
