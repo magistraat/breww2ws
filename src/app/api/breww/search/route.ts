@@ -42,7 +42,7 @@ export async function POST(request: Request) {
   const baseUrl = baseUrlRaw.endsWith("/")
     ? baseUrlRaw.slice(0, -1)
     : baseUrlRaw;
-  const url = new URL(`${baseUrl}/products`);
+  const url = new URL(`${baseUrl}/products/`);
   url.searchParams.set("name__contains", query);
   url.searchParams.set("code__contains", query);
 
@@ -67,6 +67,25 @@ export async function POST(request: Request) {
     ? data.results
     : Array.isArray(data?.data)
     ? data.data
-    : data;
-  return NextResponse.json(items ?? []);
+    : Array.isArray(data)
+    ? data
+    : [];
+
+  if (Array.isArray(items)) {
+    const lowered = query.toLowerCase();
+    const filtered = items.filter((item: Record<string, unknown>) => {
+      const fields = [
+        item.name,
+        item.code,
+        item.sku,
+        item.barcode_number,
+      ].filter(Boolean);
+      return fields.some((field) =>
+        String(field).toLowerCase().includes(lowered)
+      );
+    });
+    return NextResponse.json(filtered);
+  }
+
+  return NextResponse.json([]);
 }
