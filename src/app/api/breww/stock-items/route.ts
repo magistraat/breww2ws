@@ -12,7 +12,19 @@ export async function POST(request: Request) {
     );
   }
 
-  const settings = await getSettings();
+  let settings;
+  try {
+    settings = await getSettings();
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: "Breww settings load failed.",
+        details: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 }
+    );
+  }
+
   if (!settings?.breww_subdomain || !settings?.breww_api_key) {
     return NextResponse.json(
       { error: "Breww settings not configured." },
