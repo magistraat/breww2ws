@@ -882,18 +882,35 @@ export default function AdminPage() {
                 >
                   Templates laden
                 </button>
-                <div className="flex flex-wrap items-center gap-3">
-                  <button
-                    className="rounded-full border border-[var(--border)] bg-white px-3 py-2 text-xs font-semibold"
-                    onClick={() =>
-                      document.getElementById("template-upload")?.click()
-                    }
-                  >
-                    Upload Excel
-                  </button>
-                  <span className="text-xs text-[var(--muted)]">
-                    {templateFile ? templateFile.name : "Geen bestand gekozen"}
-                  </span>
+                <div
+                  className="flex flex-col gap-3 rounded-xl border border-dashed border-[var(--border)] bg-white/70 px-4 py-4 text-xs text-[var(--muted)]"
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const file = event.dataTransfer.files?.[0] ?? null;
+                    if (file && !file.name.endsWith(".xlsx")) return;
+                    setTemplateFile(file);
+                    setMapping({});
+                    setMappingError("");
+                  }}
+                >
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      className="rounded-full border border-[var(--border)] bg-white px-3 py-2 text-xs font-semibold"
+                      onClick={() =>
+                        document.getElementById("template-upload")?.click()
+                      }
+                    >
+                      Upload Excel
+                    </button>
+                    <span className="text-xs text-[var(--muted)]">
+                      {templateFile
+                        ? templateFile.name
+                        : "Sleep een .xlsx bestand of klik om te kiezen."}
+                    </span>
+                  </div>
                   <input
                     id="template-upload"
                     type="file"
