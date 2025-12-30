@@ -14,7 +14,9 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json().catch(() => ({}));
-  const keys = Array.isArray(body?.keys) ? body.keys : [];
+  const keys: string[] = Array.isArray(body?.keys)
+    ? body.keys.filter((item: unknown) => typeof item === "string")
+    : [];
   const scope = typeof body?.scope === "string" ? body.scope : "wholesaler";
   const wholesalerId =
     typeof body?.wholesaler_id === "string" ? body.wholesaler_id : null;
@@ -24,7 +26,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  const records = keys.map((key) => ({
+  const records = keys.map((key: string) => ({
     key,
     label: key.replace(/_/g, " "),
     scope,
