@@ -44,13 +44,19 @@ export async function POST(request: Request) {
     : baseUrlRaw;
   const url = `${baseUrl}/products/${productId}/stock-items`;
 
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${settings.breww_api_key}`,
-      "Content-Type": "application/json",
-    },
-    cache: "no-store",
-  });
+  const tryRequest = async (authHeader: string) =>
+    fetch(url, {
+      headers: {
+        Authorization: authHeader,
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+    });
+
+  let response = await tryRequest(`Bearer ${settings.breww_api_key}`);
+  if (response.status === 401 || response.status === 403) {
+    response = await tryRequest(`Token ${settings.breww_api_key}`);
+  }
 
   if (!response.ok) {
     const text = await response.text();
