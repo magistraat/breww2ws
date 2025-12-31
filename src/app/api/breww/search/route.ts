@@ -45,6 +45,7 @@ export async function POST(request: Request) {
   const url = new URL(`${baseUrl}/products/`);
   url.searchParams.set("name__contains", query);
   url.searchParams.set("code__contains", query);
+  url.searchParams.set("page_size", "200");
 
   const tryRequest = async (authHeader: string) =>
     fetch(url, {
@@ -77,9 +78,9 @@ export async function POST(request: Request) {
     ? data
     : [];
 
-  if (Array.isArray(items)) {
+  const filterItems = (list: Record<string, unknown>[]) => {
     const lowered = query.toLowerCase();
-    const filtered = items.filter((item: Record<string, unknown>) => {
+    return list.filter((item) => {
       const fields = [
         item.name,
         item.code,
@@ -90,8 +91,37 @@ export async function POST(request: Request) {
         String(field).toLowerCase().includes(lowered)
       );
     });
-    return NextResponse.json(filtered);
+  };
+
+  if (Array.isArray(items) && items.length > 0) {
+    return NextResponse.json(filterItems(items));
   }
 
-  return NextResponse.json([]);
+  // Fallback: fetch without filters and filter client-side
+  const fallbackUrl = new URL(`${baseUrl}/products/`);
+  fallbackUrl.searchParams.set("page_size", "200");
+  let fallbackResponse = await tryRequest(`Bearer ${settings.breww_api_key}`);
+  if (fallbackResponse.status === 401 || fallbackResponse.status === 403) {
+    fallbackResponse = await tryRequest(`Token ${settings.breww_api_key}`);
+  }
+  if (!fallbackResponse.ok) {
+    const text = await fallbackResponse.text();
+    return NextResponse.json(
+      {
+        error: "Breww request failed.",
+        status: fallbackResponse.status,
+        details: text,
+      },
+      { status: fallbackResponse.status }
+    );
+  }
+  const fallbackData = await fallbackResponse.json();
+  const fallbackItems = Array.isArray(fallbackData?.results)
+    ? fallbackData.results
+    : Array.isArray(fallbackData?.data)
+    ? fallbackData.data
+    : Array.isArray(fallbackData)
+    ? fallbackData
+    : [];
+  return NextResponse.json(filterItems(fallbackItems));
 }
