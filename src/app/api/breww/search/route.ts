@@ -47,8 +47,8 @@ export async function POST(request: Request) {
   url.searchParams.set("code__contains", query);
   url.searchParams.set("page_size", "200");
 
-  const tryRequest = async (authHeader: string) =>
-    fetch(url, {
+  const tryRequest = async (targetUrl: string, authHeader: string) =>
+    fetch(targetUrl, {
       headers: {
         Authorization: authHeader,
         "Content-Type": "application/json",
@@ -56,9 +56,9 @@ export async function POST(request: Request) {
       cache: "no-store",
     });
 
-  let response = await tryRequest(`Bearer ${settings.breww_api_key}`);
+  let response = await tryRequest(url.toString(), `Bearer ${settings.breww_api_key}`);
   if (response.status === 401 || response.status === 403) {
-    response = await tryRequest(`Token ${settings.breww_api_key}`);
+    response = await tryRequest(url.toString(), `Token ${settings.breww_api_key}`);
   }
 
   if (!response.ok) {
@@ -97,31 +97,47 @@ export async function POST(request: Request) {
     return NextResponse.json(filterItems(items));
   }
 
-  // Fallback: fetch without filters and filter client-side
-  const fallbackUrl = new URL(`${baseUrl}/products/`);
-  fallbackUrl.searchParams.set("page_size", "200");
-  let fallbackResponse = await tryRequest(`Bearer ${settings.breww_api_key}`);
-  if (fallbackResponse.status === 401 || fallbackResponse.status === 403) {
-    fallbackResponse = await tryRequest(`Token ${settings.breww_api_key}`);
-  }
-  if (!fallbackResponse.ok) {
-    const text = await fallbackResponse.text();
-    return NextResponse.json(
-      {
-        error: "Breww request failed.",
-        status: fallbackResponse.status,
-        details: text,
-      },
-      { status: fallbackResponse.status }
+  // Fallback: paginate unfiltered list and filter client-side
+  const maxPages = 5;
+  let pageCount = 0;
+  let nextUrl: string | null = `${baseUrl}/products/?page_size=200`;
+  while (nextUrl && pageCount < maxPages) {
+    pageCount += 1;
+    let fallbackResponse = await tryRequest(
+      nextUrl,
+      `Bearer ${settings.breww_api_key}`
     );
+    if (fallbackResponse.status === 401 || fallbackResponse.status === 403) {
+      fallbackResponse = await tryRequest(
+        nextUrl,
+        `Token ${settings.breww_api_key}`
+      );
+    }
+    if (!fallbackResponse.ok) {
+      const text = await fallbackResponse.text();
+      return NextResponse.json(
+        {
+          error: "Breww request failed.",
+          status: fallbackResponse.status,
+          details: text,
+        },
+        { status: fallbackResponse.status }
+      );
+    }
+    const fallbackData = await fallbackResponse.json();
+    const fallbackItems = Array.isArray(fallbackData?.results)
+      ? fallbackData.results
+      : Array.isArray(fallbackData?.data)
+      ? fallbackData.data
+      : Array.isArray(fallbackData)
+      ? fallbackData
+      : [];
+    const filtered = filterItems(fallbackItems);
+    if (filtered.length > 0) {
+      return NextResponse.json(filtered);
+    }
+    nextUrl = typeof fallbackData?.next === "string" ? fallbackData.next : null;
   }
-  const fallbackData = await fallbackResponse.json();
-  const fallbackItems = Array.isArray(fallbackData?.results)
-    ? fallbackData.results
-    : Array.isArray(fallbackData?.data)
-    ? fallbackData.data
-    : Array.isArray(fallbackData)
-    ? fallbackData
-    : [];
-  return NextResponse.json(filterItems(fallbackItems));
+
+  return NextResponse.json([]);
 }
