@@ -7,16 +7,11 @@ import { Building2, FileSpreadsheet, Package, Search } from "lucide-react";
 type BrewwProduct = {
   id: string;
   name: string;
+  code?: string;
   sku?: string;
-  abv?: number;
-};
-
-type BrewwStockItem = {
-  id: string;
-  name: string;
-  sku?: string;
-  ean?: string;
-  volume?: string;
+  barcode_number?: string;
+  alcohol_content?: number;
+  liquid_volume_gross?: { litre?: number };
 };
 
 type Wholesaler = {
@@ -41,11 +36,8 @@ type FieldDefinition = {
 export default function Home() {
   const [query, setQuery] = useState("");
   const [products, setProducts] = useState<BrewwProduct[]>([]);
-  const [stockItems, setStockItems] = useState<BrewwStockItem[]>([]);
   const [selectedProduct, setSelectedProduct] =
     useState<BrewwProduct | null>(null);
-  const [selectedStock, setSelectedStock] =
-    useState<BrewwStockItem | null>(null);
   const [wholesalers, setWholesalers] = useState<Wholesaler[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedWholesaler, setSelectedWholesaler] = useState("");
@@ -67,8 +59,8 @@ export default function Home() {
   );
 
   const canGenerate = useMemo(
-    () => Boolean(selectedProduct && selectedStock && selectedTemplate),
-    [selectedProduct, selectedStock, selectedTemplate]
+    () => Boolean(selectedProduct && selectedTemplate),
+    [selectedProduct, selectedTemplate]
   );
 
   useEffect(() => {
@@ -164,44 +156,12 @@ export default function Home() {
     }
   };
 
-  const loadStockItems = async (product: BrewwProduct) => {
+  const selectProduct = (product: BrewwProduct) => {
     setSelectedProduct(product);
-    setSelectedStock(null);
-    setStockItems([]);
-    setStatus("loading");
-    setErrorMessage("");
-    try {
-      const response = await fetch("/api/breww/stock-items", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId: product.id }),
-      });
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(
-          text ? `Stock items ophalen mislukt: ${text}` : "Stock items ophalen mislukt."
-        );
-      }
-      const data = await response.json();
-      const items = Array.isArray(data?.results)
-        ? data.results
-        : Array.isArray(data?.data)
-        ? data.data
-        : Array.isArray(data)
-        ? data
-        : [];
-      setStockItems(items);
-      setStatus("idle");
-    } catch (error) {
-      setStatus("error");
-      setErrorMessage(
-        error instanceof Error ? error.message : "Onbekende fout."
-      );
-    }
   };
 
   const handleGenerate = async () => {
-    if (!selectedTemplate || !selectedProduct || !selectedStock) return;
+    if (!selectedTemplate || !selectedProduct) return;
     setExportStatus("exporting");
     setExportError("");
 
@@ -215,10 +175,10 @@ export default function Home() {
 
     const fields = {
       artikelnaam: selectedProduct.name,
-      sku: selectedStock.sku ?? "",
-      ean: selectedStock.ean ?? "",
-      abv: selectedProduct.abv ?? "",
-      volume: selectedStock.volume ?? "",
+      sku: selectedProduct.code ?? selectedProduct.sku ?? "",
+      ean: selectedProduct.barcode_number ?? "",
+      abv: selectedProduct.alcohol_content ?? "",
+      volume: selectedProduct.liquid_volume_gross?.litre ?? "",
       marketing_omschrijving: enrichment.description,
       herkomst: enrichment.origin,
       serveertip: enrichment.serving,
@@ -364,12 +324,12 @@ export default function Home() {
                     {products.map((product) => (
                       <button
                         key={product.id}
-                        onClick={() => loadStockItems(product)}
+                        onClick={() => selectProduct(product)}
                         className="flex w-full items-center justify-between rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-left text-sm"
                       >
                         <span className="font-semibold">{product.name}</span>
                         <span className="text-xs text-[var(--muted)]">
-                          {product.sku ?? product.id}
+                          {product.code ?? product.sku ?? product.id}
                         </span>
                       </button>
                     ))}
@@ -381,30 +341,22 @@ export default function Home() {
           <div className="grid gap-4 md:grid-cols-2">
             <div className="rounded-2xl border border-[var(--border)] bg-white px-4 py-4">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-                Verpakking (Stock Item)
+                Geselecteerd product
               </p>
               <div className="mt-3 space-y-2 text-sm">
-                {stockItems.length === 0 && (
+                {!selectedProduct && (
                   <p className="text-xs text-[var(--muted)]">
                     Selecteer eerst een product.
                   </p>
                 )}
-                {stockItems.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => setSelectedStock(item)}
-                    className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-sm ${
-                      selectedStock?.id === item.id
-                        ? "border-[var(--accent)] bg-[#fef3e7]"
-                        : "border-[var(--border)]"
-                    }`}
-                  >
-                    <span>{item.name}</span>
-                    <span className="text-xs text-[var(--muted)]">
-                      {item.sku ?? item.ean ?? item.id}
-                    </span>
-                  </button>
-                ))}
+                {selectedProduct && (
+                  <div className="rounded-xl border border-[var(--accent)] bg-[#fef3e7] px-3 py-2">
+                    <p className="font-semibold">{selectedProduct.name}</p>
+                    <p className="text-xs text-[var(--muted)]">
+                      {selectedProduct.code ?? selectedProduct.sku ?? selectedProduct.id}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
             <div className="rounded-2xl border border-[var(--border)] bg-white px-4 py-4">
