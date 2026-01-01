@@ -3,9 +3,12 @@ import { getSettings } from "@/lib/settings";
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
-  const productId = typeof body?.productId === "string" ? body.productId : "";
+  const productIdValue =
+    typeof body?.productId === "string" || typeof body?.productId === "number"
+      ? String(body.productId)
+      : "";
 
-  if (!productId) {
+  if (!productIdValue) {
     return NextResponse.json(
       { error: "Missing productId." },
       { status: 400 }
@@ -42,7 +45,7 @@ export async function POST(request: Request) {
   const baseUrl = baseUrlRaw.endsWith("/")
     ? baseUrlRaw.slice(0, -1)
     : baseUrlRaw;
-  const url = `${baseUrl}/products/${productId}/stock-items`;
+  const url = `${baseUrl}/products/${productIdValue}/stock-items`;
 
   const tryRequest = async (authHeader: string) =>
     fetch(url, {
