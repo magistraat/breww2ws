@@ -183,8 +183,14 @@ export default function Home() {
         );
       }
       const data = await response.json();
-      const items = Array.isArray(data?.data) ? data.data : data;
-      setStockItems(items ?? []);
+      const items = Array.isArray(data?.results)
+        ? data.results
+        : Array.isArray(data?.data)
+        ? data.data
+        : Array.isArray(data)
+        ? data
+        : [];
+      setStockItems(items);
       setStatus("idle");
     } catch (error) {
       setStatus("error");
