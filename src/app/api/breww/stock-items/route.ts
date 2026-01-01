@@ -45,10 +45,14 @@ export async function POST(request: Request) {
   const baseUrl = baseUrlRaw.endsWith("/")
     ? baseUrlRaw.slice(0, -1)
     : baseUrlRaw;
-  const url = `${baseUrl}/products/${productIdValue}/stock-items`;
+  const candidates = [
+    `${baseUrl}/products/${productIdValue}/stock-items/`,
+    `${baseUrl}/stock_items/?product_id=${productIdValue}`,
+    `${baseUrl}/stock-items/?product_id=${productIdValue}`,
+  ];
 
-  const tryRequest = async (authHeader: string) =>
-    fetch(url, {
+  const tryRequest = async (targetUrl: string, authHeader: string) =>
+    fetch(targetUrl, {
       headers: {
         Authorization: authHeader,
         "Content-Type": "application/json",
@@ -56,19 +60,26 @@ export async function POST(request: Request) {
       cache: "no-store",
     });
 
-  let response = await tryRequest(`Bearer ${settings.breww_api_key}`);
-  if (response.status === 401 || response.status === 403) {
-    response = await tryRequest(`Token ${settings.breww_api_key}`);
-  }
-
-  if (!response.ok) {
+  let lastError: { status: number; details: string } | null = null;
+  for (const targetUrl of candidates) {
+    let response = await tryRequest(targetUrl, `Bearer ${settings.breww_api_key}`);
+    if (response.status === 401 || response.status === 403) {
+      response = await tryRequest(targetUrl, `Token ${settings.breww_api_key}`);
+    }
+    if (response.ok) {
+      const data = await response.json();
+      return NextResponse.json(data);
+    }
     const text = await response.text();
-    return NextResponse.json(
-      { error: "Breww request failed.", status: response.status, details: text },
-      { status: response.status }
-    );
+    lastError = { status: response.status, details: text };
   }
 
-  const data = await response.json();
-  return NextResponse.json(data);
+  return NextResponse.json(
+    {
+      error: "Breww request failed.",
+      status: lastError?.status ?? 404,
+      details: lastError?.details ?? "No endpoint matched.",
+    },
+    { status: lastError?.status ?? 404 }
+  );
 }
